@@ -13,7 +13,9 @@ import com.medai.service.AIService;
 import com.medai.service.AuditService;
 import com.medai.service.RiskEngineService;
 import com.medai.service.VisitService;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -45,7 +47,10 @@ public class VisitServiceImpl implements VisitService {
     public DecisionSupportResponse create(CreateVisitRequest req, String traceId) {
         // 1) 取 patient
         Patient patient = patientRepository.findById(req.getPatientId())
-                .orElseThrow(() -> new RuntimeException("patient not found: " + req.getPatientId()));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "patient not found: " + req.getPatientId()
+                ));
 
         // 2) 创建 visit
         Visit v = new Visit();

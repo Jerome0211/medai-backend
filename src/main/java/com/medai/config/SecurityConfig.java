@@ -19,6 +19,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.CorsUtils;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
@@ -29,30 +30,48 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                // 1. 直接在这里集成 CORS 配置
+                // 1. 开启 CORS 并引用下方的配置
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                // 2. 禁用 CSRF（API 服务通常不需要）
                 .csrf(csrf -> csrf.disable())
-                .headers(headers -> headers.frameOptions(frame -> frame.disable()))
+                // 3. 核心：放行策略
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // 必须放行 OPTIONS
+                        // 允许所有浏览器的“预检” OPTIONS 请求
+                        .requestMatchers(CorsUtils::isPreFlightRequest).permitAll()
+                        // 暂时放行所有 API 请求以供测试
                         .anyRequest().permitAll()
                 )
+                // 4. 禁用默认的登录表单和 HTTP Basic 认证，避免弹出登录框
+                .formLogin(form -> form.disable())
                 .httpBasic(hb -> hb.disable())
-                .formLogin(form -> form.disable());
+                // 5. 允许 H2 控制台等使用 Frame
+                .headers(headers -> headers.frameOptions(frame -> frame.disable()));
 
         return http.build();
     }
 
-    // 2. 显式定义这个 Bean，确保 Security 能认到它
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // 允许你的前端域名
-        configuration.setAllowedOrigins(Arrays.asList("https://vituslab.com", "https://www.vituslab.com"));
-        // 允许所有方法和 Header
+
+        // 允许的来源：务必包含带 www 和不带 www 的域名，以及 Vercel 的预览域名
+        configuration.setAllowedOrigins(Arrays.asList(
+                "https://vituslab.com",
+                "https://www.vituslab.com",
+                "https://medai-frontend-phi.vercel.app"
+        ));
+
+        // 允许的方法
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(Arrays.asList("*"));
+
+        // 允许的 Header
+        configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "X-Requested-With"));
+
+        // 允许发送 Cookie (如果后续需要登录功能)
         configuration.setAllowCredentials(true);
+
+        // 预检请求的有效期（秒），设为 1 小时，减少 OPTIONS 请求次数
+        configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
